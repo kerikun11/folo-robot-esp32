@@ -75,12 +75,7 @@ public:
       },
       "Speaker",
       4096, this, 1, NULL, tskNO_AFFINITY);
-    // Ending
-    initialized_ = true;
     return true;
-  }
-  bool is_initialized() const {
-    return initialized_;
   }
   void play(const enum Music music, TickType_t xTicksToWait = 0) {
     xQueueSendToBack(play_list_, &music, xTicksToWait);
@@ -88,7 +83,6 @@ public:
 
 protected:
   static constexpr const char* TAG = "Speaker";
-  bool initialized_ = false;
   QueueHandle_t play_list_;
   ledc_channel_t channel_;
   ledc_timer_t timer_;
@@ -117,7 +111,7 @@ protected:
     while (1) {
       enum Music music;
       if (xQueueReceive(play_list_, &music, pdMS_TO_TICKS(1000)) == pdFALSE) {
-        note(NOTE_C, 7, 50);
+        note(NOTE_C, 7, 10);
         mute(0);
         continue;
       }

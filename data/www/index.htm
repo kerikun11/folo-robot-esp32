@@ -5,43 +5,68 @@
 	<meta charset="utf-8" />
 	<title>FOLO Controller</title>
 	<style type="text/css">
+		body {
+			padding: 1em 5em;
+			font-size: 2em;
+		}
+
+		.button {
+			height: auto;
+		}
+
+		#range-motor-trans,
+		#range-motor-rot {
+			width: 20em;
+		}
 	</style>
 </head>
 
 <body>
-	<h1 style="text-align:center" onclick="load()">FOLO Controller</h1>
-	<button id="button_led_set_l1_r1">LED ON</button>
-	<button id="button_led_set_l0_r0">LED OFF</button>
+	<h1 style="text-align:center">FOLO Controller</h1>
+	<div id="controller" style="text-align:center">
+		<h3>LED</h3>
+		<p>
+			<button id="button-led-l">L</button>
+			<input type="range" min="0" max="10" value="10" class="slider" id="range-led-l">
+			<input type="range" min="0" max="10" value="10" class="slider" id="range-led-r">
+			<button id="button-led-l">R</button>
+		</p>
+		<h3>モーター</h3>
+		<p>
+			後
+			<input type="range" min="-10" max="10" value="0" class="slider" id="range-motor-trans">
+			前
+		</p>
+		<p>
+			左
+			<input type="range" min="-10" max="10" value="0" class="slider" id="range-motor-rot">
+			右
+		</p>
+		<canvas id="joystickCanvas" width="200" height="200"></canvas>
+	</div>
 
 	<!-- <script src="/main.js"></script> -->
 	<script>
-		document.getElementById("button_led_set_l1_r1").addEventListener("click", function () {
-			var url = "/led/set";
-			var params = { "l": "1", "r": "1" };
-			var queryString = Object.keys(params).map(
-				key => key + '=' + encodeURIComponent(params[key])).join('&');
-			var requestUrl = url + "?" + queryString;
-			fetch(requestUrl)
-				.then(response => {
-					console.log("GETリクエストが送信されました。");
-				})
-				.catch(error => {
-					console.error("GETリクエストの送信中にエラーが発生しました:", error);
-				});
+		document.querySelectorAll('input').forEach(function (inputElement) {
+			inputElement.addEventListener("input", function (event) {
+				var t = event.target
+				var v = t.value;
+				switch (t.id) {
+					case "range-led-l": fetch("/led/set?l=" + (v / t.max)); break;
+					case "range-led-r": fetch("/led/set?r=" + (v / t.max)); break;
+					case "range-motor-trans": fetch("/motor/set?trans=" + (v / t.max)); break;
+					case "range-motor-rot": fetch("/motor/set?rot=" + (-v / t.max)); break;
+				}
+			});
 		});
-		document.getElementById("button_led_set_l0_r0").addEventListener("click", function () {
-			var url = "/led/set";
-			var params = { "l": "0", "r": "0" };
-			var queryString = Object.keys(params).map(
-				key => key + '=' + encodeURIComponent(params[key])).join('&');
-			var requestUrl = url + "?" + queryString;
-			fetch(requestUrl)
-				.then(response => {
-					console.log("GETリクエストが送信されました。");
-				})
-				.catch(error => {
-					console.error("GETリクエストの送信中にエラーが発生しました:", error);
-				});
+		document.querySelectorAll('button').forEach(function (inputElement) {
+			inputElement.addEventListener("input", function (event) {
+				var t = event.target
+				switch (t.id) {
+					case "button-led-l": fetch("/led/set?l=1"); break;
+					case "button-led-r": fetch("/led/set?r=1"); break;
+				}
+			});
 		});
 	</script>
 </body>

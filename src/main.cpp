@@ -19,6 +19,9 @@ Reflector reflector;
 IMU imu;
 WebServer server;
 
+void setup_wifi();
+void setup_server();
+
 void setup() {
   log_i("Hello, from " ARDUINO_BOARD ".");
 
@@ -26,68 +29,26 @@ void setup() {
   speaker.begin(PIN_SPEAKER, LEDC_TIMER_1, LEDC_CHANNEL_0);
   speaker.play(Speaker::BOOT);
   led.begin(PIN_LED_L, PIN_LED_R);
-  analogWriteFrequency(20000);
-  analogWriteResolution(8);
 
   /* WiFi */
-  led.setBoth();
-  WiFi.begin();
-  log_i("Connecting to %s ...", WiFi.SSID().c_str());
-  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
-    log_e("WiFi connection failed");
-    speaker.play(Speaker::ERROR);
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.beginSmartConfig();
-    while (!WiFi.smartConfigDone()) {
-      led.set(true, false);
-      delay(200);
-      led.set(false, true);
-      delay(200);
-    }
-  }
-  log_i("WiFi connected. SSID: %s IP: %s", WiFi.SSID().c_str(),
-        WiFi.localIP().toString().c_str());
+  setup_wifi();
   OTA::start(HOSTNAME);
   speaker.play(Speaker::SUCCESSFUL);
+  led.play(LED::BLINK_ALT);
 
   /* Other Drivers */
   SPIFFS.begin();
   button.begin((gpio_num_t)PIN_BUTTON);
-  motor.begin(PINS_MOTOR_TRANSLATION, PINS_MOTOR_ROTATION);
   reflector.begin(PIN_REFLECTOR_TX, PINS_REFLECTOR_RX);
+  motor.begin(PINS_MOTOR_TRANSLATION, PINS_MOTOR_ROTATION);
+
+  /* Web Server */
+  setup_server();
+
+  /* IMU */
   speaker.play(Speaker::CALIBRATION);
   if (imu.begin() < 0) speaker.play(Speaker::DOWN);
   speaker.play(Speaker::CANCEL);
-
-  /* Web Server */
-  log_i("WebServer start");
-  server.on("/led/set", [&]() {
-    log_i("URI: %s", server.uri().c_str());
-    for (int i = 0; i < server.args(); i++)
-      log_i("- args[%s]: %s", server.argName(i).c_str(), server.arg(i).c_str());
-    if (server.hasArg("l")) {
-      float value_l = server.arg("l").toFloat();
-      led.set(0, value_l);
-    }
-    if (server.hasArg("r")) {
-      float value_r = server.arg("r").toFloat();
-      led.set(1, value_r);
-    }
-    server.send(200, "plain/text", "OK");
-  });
-  server.on("/motor/set", [&]() {
-    log_i("URI: %s", server.uri().c_str());
-    for (int i = 0; i < server.args(); i++)
-      log_i("- args[%s]: %s", server.argName(i).c_str(), server.arg(i).c_str());
-    float trans = server.arg("trans").toFloat();
-    float rot = server.arg("rot").toFloat();
-    motor.drive(trans, rot);
-    delay(100);
-    motor.free();
-    server.send(200, "plain/text", "OK");
-  });
-  server.serveStatic("/", SPIFFS, "/www/");
-  server.begin();
 
   /* main loop*/
   int counter = 0;
@@ -119,9 +80,13 @@ void setup() {
     }
 #endif
 
+    if (button.pressing) {
+      speaker.play(Speaker::CANCEL);
+      motor.free();
+    }
     if (button.pressed) {
       button.pressed = 0;
-      speaker.play(Speaker::SELECT);
+      // speaker.play(Speaker::SELECT);
       // if (counter % 5 == 0) motor.drive(+1, 0);
       // if (counter % 5 == 1) motor.drive(-1, 0);
       // if (counter % 5 == 2) motor.drive(0, +1);
@@ -142,4 +107,68 @@ void setup() {
 
 void loop() {
   vTaskDelay(portMAX_DELAY);
+}
+
+void setup_wifi() {
+  WiFi.begin();
+  log_i("Connecting to %s ...", WiFi.SSID().c_str());
+  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    log_e("WiFi connection failed");
+    speaker.play(Speaker::ERROR);
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.beginSmartConfig();
+    while (!WiFi.smartConfigDone()) {
+      led.set(true, false);
+      delay(200);
+      led.set(false, true);
+      delay(200);
+    }
+  }
+  log_i("WiFi connected. SSID: %s IP: %s", WiFi.SSID().c_str(),
+        WiFi.localIP().toString().c_str());
+}
+
+void setup_server() {
+  log_i("WebServer start");
+  server.on("/led/set", [&]() {
+    log_i("URI: %s", server.uri().c_str());
+    for (int i = 0; i < server.args(); i++)
+      log_i("- args[%s]: %s", server.argName(i).c_str(), server.arg(i).c_str());
+    if (server.hasArg("l")) {
+      float value_l = server.arg("l").toFloat();
+      led.set(0, value_l);
+    }
+    if (server.hasArg("r")) {
+      float value_r = server.arg("r").toFloat();
+      led.set(1, value_r);
+    }
+    server.send(200, "plain/text", "OK");
+  });
+  server.on("/motor/set", [&]() {
+    log_i("URI: %s", server.uri().c_str());
+    for (int i = 0; i < server.args(); i++)
+      log_i("- args[%s]: %s", server.argName(i).c_str(), server.arg(i).c_str());
+    if (server.hasArg("trans")) {
+      float value = server.arg("trans").toFloat();
+      motor.drive_trans(value);
+    }
+    if (server.hasArg("rot")) {
+      float value = server.arg("rot").toFloat();
+      motor.drive_rot(value);
+    }
+    // delay(100);
+    // motor.free();
+    server.send(200, "plain/text", "OK");
+  });
+  server.on("/imu/calibration", [&]() {
+    log_i("URI: %s", server.uri().c_str());
+    for (int i = 0; i < server.args(); i++)
+      log_i("- args[%s]: %s", server.argName(i).c_str(), server.arg(i).c_str());
+    speaker.play(Speaker::CALIBRATION);
+    imu.calibration();
+    speaker.play(Speaker::CANCEL);
+    server.send(200, "plain/text", "OK");
+  });
+  server.serveStatic("/", SPIFFS, "/www/");
+  server.begin();
 }
